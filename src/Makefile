@@ -2,17 +2,26 @@
 
 # libraries
 ARMA = -l armadillo
-LIBS = $(ARMA)
+BOOST_PO = -l boost_program_options
+LIBS = $(ARMA) $(BOOST_PO)
 
 # compiler flags
 CXXFLAGS	= -std=c++17 -Ofast -march=native -g -Wall -fopenmp
-OBJFILES 	= main.o 
-TARGET   	= ../bin/arma_test
 
-all: $(TARGET)
+PREP_OBJFILES 	= preprocess.o
+PREP_TARGET   	= ../bin/preprocess
 
-$(TARGET): $(OBJFILES)
-	$(CXX) $(CXXFLAGS) $(LIBS) -o $(TARGET) $(OBJFILES)
+ENRICHMENT_OBJFILES 	= enrichment.o
+ENRICHMENT_TARGET   	= ../bin/enrichment
+
+all: $(PREP_TARGET) $(ENRICHMENT_TARGET)
+
+$(PREP_TARGET): $(PREP_OBJFILES)
+	$(CXX) $(CXXFLAGS) $(LIBS) -o $(PREP_TARGET) $(PREP_OBJFILES)
+
+$(ENRICHMENT_TARGET): $(ENRICHMENT_OBJFILES)
+	$(CXX) $(CXXFLAGS) $(LIBS) -o $(ENRICHMENT_TARGET) $(ENRICHMENT_OBJFILES)
 
 clean:
-	rm -v $(TARGET) $(OBJFILES)
+	rm -v $(PREP_TARGET) $(PREP_OBJFILES)
+	rm -v $(ENRICHMENT_TARGET) $(ENRICHMENT_OBJFILES)
