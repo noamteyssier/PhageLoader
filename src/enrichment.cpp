@@ -208,11 +208,56 @@ public:
 
 };
 
+class PeptideLoader
+{
+private:
+  std::vector<std::string> peptide_names;
+public:
+
+  void init(std::string filename)
+  {
+    std::ifstream file(filename);
+    std::string line;
+
+    while(getline(file, line))
+    {
+      peptide_names.push_back(line);
+    }
+  }
+
+  int GetTotalPeptides()
+  {
+    return peptide_names.size();
+  }
+
+  void RemoveIndices(arma::uvec indices)
+  {
+    std::sort(indices.begin(), indices.end(), std::greater<int>());
+
+    for (auto & x : indices)
+    {
+      peptide_names.erase(peptide_names.begin() + x);
+    }
+
+  }
+
+  void Save(std::string filename)
+  {
+    std::ofstream file(filename);
+    file << "#Peptides" << std::endl;
+    for (auto & x : peptide_names)
+    {
+      file << x << std::endl;
+    }
+  }
+
+};
 
 class MatrixLoader
 {
 private:
   SampleLoader sl;
+  PeptideLoader pl;
   arma::mat count_matrix;
   arma::mat zscore_matrix;
 
@@ -229,23 +274,33 @@ private:
   arma::colvec healthy_sds;
 
   arma::uvec passing_peptides;
+  arma::uvec failing_peptides;
 
 public:
-  MatrixLoader(arma::mat m, std::string sample_fn) :
+  MatrixLoader(arma::mat m, std::string sample_fn, std::string peptide_fn) :
     count_matrix(m)
     {
       sl.init(sample_fn);
+      pl.init(peptide_fn);
       ConfirmDimensions();
     };
 
   void ConfirmDimensions()
   {
     int num_samples = sl.GetTotalSamples();
+    int num_peptides = pl.GetTotalPeptides();
+
     int num_cols = count_matrix.n_cols;
+    int num_rows = count_matrix.n_rows;
 
     if (num_samples != num_cols)
     {
-      fprintf(stderr, "Error : Expecting (%i) Samples but Sample List has (%lli)\n", num_samples, count_matrix.n_cols);
+      fprintf(stderr, "Error : Expecting (%i) Samples but Count Matrix has (%lli)\n", num_samples, count_matrix.n_cols);
+      exit(-1);
+    }
+    if (num_peptides != num_rows)
+    {
+      fprintf(stderr, "Error : Expecting (%i) Peptides but Count Matrix has (%lli)\n", num_peptides, count_matrix.n_rows);
       exit(-1);
     }
 
@@ -403,6 +458,8 @@ public:
     }
 
     passing_peptides = arma::find(peptide_sums >= threshold);
+    failing_peptides = arma::find(peptide_sums < threshold);
+
   }
 
   void Write_BMAT(std::string output_prefix)
@@ -442,6 +499,12 @@ public:
 
   }
 
+  void Write_Peptides(std::string output_prefix)
+  {
+    pl.RemoveIndices(failing_peptides);
+    pl.Save(output_prefix + "_peptides.txt");
+  }
+
 };
 
 
@@ -457,12 +520,13 @@ po::variables_map process_program_options(const int argc, const char *const argv
       ("help,h", "Help screen")
       ("input_arma,i", po::value<std::string>()->required(), "Input Count Matrix to Preprocess in ARMA binary format")
       ("sample_names,n", po::value<std::string>()->required(), "Sample Names of columns in count matrix")
+      ("peptide_names,p", po::value<std::string>()->required(), "Peptides Names of rows in count matrix")
       ("output_prefix,o", po::value<std::string>()->required(), "Output prefix to save to")
       ("minimum_readcount,r", po::value<int>()->default_value(250000), "Minimum read count to consider a sample (default = 250000)")
       ("scalar,s", po::value<int>()->default_value(500000), "Scalar to normalize read counts to post filtering (default = 500000)")
       ("z_min,z", po::value<int>()->default_value(10), "Minimum Z-Score to accept a hit (default = 10)")
       ("c_min,c", po::value<int>()->default_value(8), "Minimum number of hits in sample set to accept a peptide as enriched (default = 8)")
-      ("all_samples,p", po::bool_switch(&flag), "Include all samples in hit count threshold (default = Only Patient Samples)");
+      ("all_samples,a", po::bool_switch(&flag), "Include all samples in hit count threshold (default = Only Patient Samples)");
 
     po::store(po::parse_command_line(argc, argv, desc), vm);
 
@@ -518,6 +582,7 @@ int main(const int argc, const char *const argv[])
 
   std::string arma_fn = vm["input_arma"].as<std::string>();
   std::string sample_fn = vm["sample_names"].as<std::string>();
+  std::string peptide_fn = vm["peptide_names"].as<std::string>();
   std::string output_prefix = vm["output_prefix"].as<std::string>();
 
   int minimum_readcount = vm["minimum_readcount"].as<int>();
@@ -532,7 +597,7 @@ int main(const int argc, const char *const argv[])
   m.load(arma_fn, arma::arma_binary);
 
   // Load MatrixLoader Object
-  MatrixLoader ml(m, sample_fn);
+  MatrixLoader ml(m, sample_fn, peptide_fn);
 
   // filter samples with a minimum read count
   ml.FilterSamples(minimum_readcount);
@@ -556,9 +621,10 @@ int main(const int argc, const char *const argv[])
   // patient set
   ml.MinimumHitThreshold(c_min, all_samples);
 
-  // write enriched peptide set as a bool matrix and as a zscore matrix
+  // write enriched peptide set as a bool / zscore matrix and as a text file
   ml.Write_BMAT(output_prefix);
   ml.Write_ZMAT(output_prefix);
+  ml.Write_Peptides(output_prefix);
 
   return 0;
 }
