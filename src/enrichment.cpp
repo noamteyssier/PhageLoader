@@ -429,7 +429,14 @@ public:
         [this, threshold, i, &row_counter] (arma::rowvec& x)
         {
           arma::uvec passing_indices = arma::find( x >= threshold);
-          if (passing_indices.size() > 1)
+
+          // // greater than 1 passing zscore
+          // bool pass = (passing_indices.size() > 1);
+
+          // at least 75% of replicates have a hit
+          bool pass = ((passing_indices.size() / (float)x.size()) >= 0.75);
+
+          if (pass)
           {
             bool_matrix(row_counter, i) = 1;
             paired_zscore_matrix(row_counter, i) = arma::mean( x );
