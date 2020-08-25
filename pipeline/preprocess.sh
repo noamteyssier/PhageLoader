@@ -3,7 +3,7 @@
 input_csv=$1
 output_dir=$2
 
-git_path=${HOME}/projects/PhIP-Seq_TororoKanungu/PhageLoader
+git_path=${HOME}/projects/PhIP-Seq_TororoKanungu/src/PhageLoader
 process_bin="${git_path}/bin/preprocess"
 
 if [ ! -f "$input_csv" ]; then
